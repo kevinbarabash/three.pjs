@@ -14,6 +14,11 @@
     "tests"
   ],
   "dependencies": {
-    "three.js": "*"
+    "three.js": "*",
+    "Processing.js": "~1.4.8"
+  },
+  "devDependencies": {
+    "iframe-overlay": "~0.1.1",
+    "poster": "~0.1.0"
   }
 }
