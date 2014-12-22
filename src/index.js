@@ -1,14 +1,30 @@
 var camera, renderer, canvas, ctx;
-var geometry, material, mesh, cube;
-var p, spheres, raycaster;
+var geometry, material, mesh, cube1, cube2;
+var p, axes, raycaster;
 
 function Mesh() {
     this.geometry = new THREE.Geometry();
+    this.material = new THREE.MeshBasicMaterial({
+        vertexColors: THREE.FaceColors,
+        wireframe: false
+    });
+    this.object = new THREE.Mesh(this.geometry, this.material);
+
+    this.vertexGroup = new THREE.Object3D();
+    this.vertexMaterial = new THREE.MeshBasicMaterial( { color: new THREE.Color(0,0,0) } );
+
+    this.root = new THREE.Object3D();
+    this.root.add(this.vertexGroup);
+    this.root.add(this.object);
 }
 
 Mesh.prototype.addVertex = function (x, y, z) {
     var vertex = new THREE.Vector3(x, y, z);
     this.geometry.vertices.push(vertex);
+    
+    var sphere = new THREE.Mesh(new THREE.SphereGeometry(5, 16, 8), this.vertexMaterial);
+    sphere.position.set(x, y, z);
+    this.vertexGroup.add(sphere);
 };
 
 Mesh.prototype.addFace = function () {
@@ -39,7 +55,7 @@ var toScreenXY = function( position, camera, scene ) {
 function init() {
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(400, 400);
-    renderer.setClearColorHex(0xFFFFFF);
+    renderer.setClearColor(new THREE.Color(1,1,1));
     document.body.appendChild(renderer.domElement);
 
     canvas = document.createElement("canvas");
@@ -80,11 +96,9 @@ function init() {
     raycaster = new THREE.Raycaster();
 }
 
-function setup() {
-    var size = 60;
-    var scene = p.currentScene;
+function createCube(size) {
+    var cube = new Mesh();
 
-    cube = new Mesh();
     cube.addVertex(-size, -size, -size);
     cube.addVertex( size, -size, -size);
     cube.addVertex( size,  size, -size);
@@ -103,35 +117,41 @@ function setup() {
 
     cube.geometry.computeFaceNormals();
     cube.geometry.computeVertexNormals();
+    
+    return cube;
+}
 
-    material = new THREE.MeshBasicMaterial({
-        vertexColors: THREE.FaceColors,
-        wireframe: false
+function createAxes(length) {
+    var axesGeom = new THREE.Geometry();
+    axesGeom.vertices.push(new THREE.Vector3(-length,0,0));
+    axesGeom.vertices.push(new THREE.Vector3(length,0,0));
+    axesGeom.vertices.push(new THREE.Vector3(0,-length,0));
+    axesGeom.vertices.push(new THREE.Vector3(0,length,0));
+    axesGeom.vertices.push(new THREE.Vector3(0,0,-length));
+    axesGeom.vertices.push(new THREE.Vector3(0,0,length));
+    var axesMaterial = new THREE.LineBasicMaterial({
+        color: new THREE.Color(0.25, 0.25, 0.25),
+        linewidth: 2
+
     });
+    axes = new THREE.Line( axesGeom, axesMaterial, THREE.LinePieces );
+    return axes;
+}
 
-    // each of our mesh objects needs to be a group that contains the 
-    // the mesh faces, the spheres for the vertices, and potentially lines for edges
-    mesh = new THREE.Mesh( cube.geometry, material );
-//        mesh.position.x = -100;
-    scene.add(mesh);
+function setup() {
+    var size = 60;
+    var scene = p.currentScene;
 
-//        mesh = new THREE.Mesh( cube.geometry, material );
-//        mesh.position.x = 100;
-//        scene.add(mesh);
-//        
-    mesh.visible = true;
+    cube1 = createCube(size);
+    cube1.root.position.x += 100;
+    scene.add(cube1.root);
 
-    material = new THREE.MeshBasicMaterial( { color: new THREE.Color(0,0,0) } );
-    var vertex = new THREE.SphereGeometry(5, 16, 8);
-
-    spheres = [];
-    for (var i = 0; i < 8; i++) {
-        var sphere = new THREE.Mesh(vertex, material);
-        var corner = cube.geometry.vertices[i];
-        sphere.position.set(corner.x, corner.y, corner.z);
-        scene.add(sphere);
-        spheres.push(sphere);
-    }
+    cube2 = createCube(size);
+    cube2.root.position.x -= 100;
+    scene.add(cube2.root);
+    
+    var axes = createAxes(150);
+    scene.add(axes);
 
     p.mouseClicked = function () {
         console.log("mouse clicked at (%d, %d)", p.mouseX, p.mouseY);
@@ -153,37 +173,44 @@ function setup() {
             scene.applyMatrix(rotMatrix);
 
         }
+
+        requestAnimationFrame( redraw );
     }
 }
 
-function animate() {
-    var scene = p.currentScene;
+function isObjectVisible() {
+    
+    // TODO: each object needs to report which of it's sub objects should be considered visible
+    // then we can build a list of objects which can occlude other objects
+    
+}
 
-    requestAnimationFrame( animate );
-
-    renderer.render( scene, camera );
-
-    ctx.clearRect(0, 0, 400, 400);
-
-    for (var i = 0; i < 8; i++) {
-        var corner = cube.geometry.vertices[i];
-        var point = toScreenXY(corner, camera, scene);
-
+function drawOverlay(scene) {
+    var vertexCount = cube1.geometry.vertices.length;
+    
+    for (var i = 0; i < vertexCount; i++) {
+        var corner = cube1.geometry.vertices[i];
         var vector = corner.clone();
+        vector.applyMatrix4(cube1.root.matrix);
         vector.applyMatrix4(scene.matrix);
         vector.z = 1000;    // the same z location as the camera
 
         var dir = new THREE.Vector3();
         dir.set(0, 0, -1).transformDirection(camera.matrixWorld);
-
         // z = -1 is pointing away from the camera into the screen
 
         raycaster.set( vector, dir );
-        var intersects = raycaster.intersectObjects( scene.children );
+        var objects = [];
+        objects = objects.concat(cube1.vertexGroup.children, cube1.object);
+        var intersects = raycaster.intersectObjects( objects );
 
+
+        var transformedCorner = corner.clone().applyMatrix4(cube1.root.matrix);
+        var point = toScreenXY(transformedCorner, camera, scene);
+        
         for (var j = 0; j < intersects.length; j++) {
             if (intersects[j].object.visible) {
-                if (intersects[j].object === spheres[i]) {
+                if (intersects[j].object === cube1.vertexGroup.children[i]) {
                     point.x *= 200;
                     point.y *= 200;
 
@@ -192,20 +219,43 @@ function animate() {
                 break;
             }
         }
-
     }
 }
 
+function redraw() {
+    var scene = p.currentScene;
+    
+    renderer.render( scene, camera );
+
+    ctx.clearRect(0, 0, 400, 400);
+
+    drawOverlay(scene);   
+}
 
 init();
 setup();
-animate();
+redraw();
+
+// TODO: multiple objects
+// TODO: named objects
+// TODO: toggle semitransparent faces
+// TODO: toggle center point
 
 document.querySelector("#showFaces").addEventListener("click", function (e) {
     if (e.target.checked) {
-        mesh.visible = true;
+        cube1.object.visible = true;
     } else {
-        mesh.visible = false;
+        cube1.object.visible = false;
     }
+    redraw();
+});
+
+document.querySelector("#showAxes").addEventListener("click", function (e) {
+    if (e.target.checked) {
+        axes.visible = true;
+    } else {
+        axes.visible = false;
+    }
+    redraw();
 });
 
