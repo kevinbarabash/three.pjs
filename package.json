@@ -17,7 +17,8 @@
   },
   "homepage": "https://github.com/kevinb7/three.pjs",
   "devDependencies": {
-    "6to5ify": "^2.0.0",
-    "browserify": "^8.0.1"
+    "gulp": "^3.8.10",
+    "gulp-6to5": "^1.0.2",
+    "gulp-watch": "^3.0.0"
   }
 }

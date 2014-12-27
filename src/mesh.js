@@ -45,3 +45,4 @@ class Mesh {
     
     // TODO: add a private method to get the visible object(s)
 }
+console.log("hello");
